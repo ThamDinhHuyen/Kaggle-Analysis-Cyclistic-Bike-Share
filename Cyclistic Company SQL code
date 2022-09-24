@@ -1,0 +1,244 @@
+—- COMBINE DATA AND CAST DATA TYPE
+SELECT ride_id, rideable_type, started_at, 
+CAST(started_at AS time) as started_time, ended_at, 
+CAST(ended_at AS time) as ended_time, start_station_name, 
+start_station_id, start_station_id, end_station_name, end_station_id, 
+start_lat, start_lng, end_lat, end_lng, member_casual
+FROM
+(
+SELECT * FROM `second-metrics-359815.bike_share.202101`
+UNION ALL
+SELECT * FROM `second-metrics-359815.bike_share.202102`
+UNION ALL
+SELECT * FROM `second-metrics-359815.bike_share.202103`
+UNION ALL
+SELECT * FROM `second-metrics-359815.bike_share.202104`
+UNION ALL
+SELECT * FROM `second-metrics-359815.bike_share.202105`
+ORDER BY 3)
+ 
+-- REMOVE NULL VALUE
+SELECT *
+FROM `second-metrics-359815.bike_share.t1_t5_merged`
+WHERE ride_id is not null
+AND rideable_type is not null
+AND started_at is not null
+AND started_time is not null
+AND ended_at is not null
+AND ended_time is not null
+AND start_station_name is not null
+AND start_station_id is not null
+AND end_station_name is not null
+AND end_station_id is not null
+AND start_lat is not null
+AND start_lng is not null
+AND end_lat is not null
+AND end_lng is not null
+AND member_casual is not null
+
+-- RIDE LENGTH MINUTE
+SELECT *, extract(hour from ride_length)*60 + extract(minute from ride_length) + extract(second from ride_length)/60 as ride_length_minute
+FROM
+( SELECT *, ended_time - started_time as ride_length
+FROM `second-metrics-359815.bike_share.cleaned_null`)
+ 
+-- RIDE LENGTH MINUTE FIXED NEGATIVE VALUES
+SELECT *,
+CASE WHEN ride_length_minute > 0 THEN ride_length_minute ELSE 1440 + ride_length_minute END AS ride_length_minute_fixed
+FROM `second-metrics-359815.bike_share.ride_length_minute`
+ORDER BY 3
+ 
+-- WEEKEND - WEEKDAY - DAY OF WEEK
+SELECT *, 
+CASE 
+WHEN day_of_week_number = 6 or day_of_week_number = 7 THEN "weekend" ELSE "weekday" END AS weekend_weekday,
+CASE 
+WHEN day_of_week_number = 1 then "monday" WHEN day_of_week_number = 2 then "tuesday" WHEN day_of_week_number = 3 then "wednesday" WHEN day_of_week_number = 4 then "thursday" WHEN day_of_week_number = 5 then "friday" WHEN day_of_week_number = 6 then "saturday" WHEN day_of_week_number = 7 then "sunday" END AS day_of_week
+FROM (
+SELECT *, EXTRACT(dayofweek FROM started_at) as day_of_week_number
+FROM `second-metrics-359815.bike_share.ride_length_minute_fixed`
+ORDER BY 3)
+ 
+-- EXTRACT MONTH, HOUR
+SELECT *, extract(hour from started_at) as hour, extract(month from started_at) as month
+FROM `second-metrics-359815.bike_share.weekend_weekday_dayofweek`
+ 
+-- TIME OF DAY
+SELECT *,
+CASE WHEN hour >=5 and hour < 12 then "morning"
+WHEN hour >=12 and hour < 17 then "afternoon"
+WHEN hour >=17 and hour < 21 then "evening"
+WHEN hour >=21 or hour < 5 then "late night" END AS time_of_day
+FROM `second-metrics-359815.bike_share.hour`
+
+-- AVG RIDE LENGTH BY MONTH
+SELECT month, avg(ride_length_minute_fixed) as avg_ride_length
+FROM `second-metrics-359815.bike_share.time_of_day`
+GROUP BY month
+ 
+-- AVG RIDE LENGTH OF MEMBERS BY MONTH
+SELECT member_casual, month, avg(ride_length_minute_fixed) as avg_ride_length
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "member"
+GROUP BY month, member_casual
+ 
+-- AVG RIDE LENGTH OF CASUALS BY MONTH
+SELECT member_casual, month, avg(ride_length_minute_fixed) as avg_ride_length
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "casual"
+GROUP BY month, member_casual
+ 
+-- AVG RIDE LENGTH BY DAY OF WEEK
+SELECT day_of_week, avg(ride_length_minute_fixed) as avg_ride_length
+FROM `second-metrics-359815.bike_share.time_of_day`
+GROUP BY day_of_week
+ 
+-- AVG RIDE LENGTH OF MEMBERS BY DAYOFWEEK
+SELECT member_casual, day_of_week, avg(ride_length_minute_fixed) as avg_ride_length
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "member"
+GROUP BY day_of_week, member_casual
+ 
+-- AVG RIDE LENGTH OF CASUALS BY DAYOFWEEK
+SELECT member_casual, day_of_week, avg(ride_length_minute_fixed) as avg_ride_length
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "casual"
+GROUP BY day_of_week, member_casual
+ 
+-- BIKE RIDES NUMBER BY MONTH
+SELECT  month, COUNT(*) AS bike_ride_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+GROUP BY month
+ 
+-- BIKE RIDES NUMBER OF MEMBERS BY MONTH
+SELECT member_casual, month, COUNT(*) AS bike_ride_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "member"
+GROUP BY month, member_casual
+ 
+-- BIKE RIDES NUMBER OF CASUALS BY MONTH
+SELECT member_casual, month, COUNT(*) AS bike_ride_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "casual"
+GROUP BY month, member_casual
+ 
+-- BIKE RIDES NUMBER BY DAY OF WEEK
+SELECT  day_of_week, COUNT(*) AS bike_ride_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+GROUP BY day_of_week
+ 
+-- BIKE RIDES NUMBER OF MEMBERS BY DAY OF WEEK
+SELECT  day_of_week, COUNT(*) AS bike_ride_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "member"
+GROUP BY day_of_week
+ 
+-- BIKE RIDES NUMBER OF CASUAL BY DAY OF WEEK
+SELECT  day_of_week, COUNT(*) AS bike_ride_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "casual"
+GROUP BY day_of_week
+ 
+-- RIDE TRIPS NUMBER BY BIKE_TYPE
+SELECT  rideable_type, COUNT(*) AS bike_ride_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+GROUP BY rideable_type
+ 
+-- RIDE TRIPS NUMBER OF MEMBERS BY BIKE_TYPE
+SELECT  rideable_type, COUNT(*) AS bike_ride_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "member"
+GROUP BY rideable_type
+ 
+-- RIDE TRIPS NUMBER OF CASUAL BY BIKE_TYPE
+SELECT  rideable_type, COUNT(*) AS bike_ride_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "casual"
+GROUP BY rideable_type
+ 
+-- AVG RIDE LENGTH BY BIKE TYPE
+SELECT  rideable_type, avg(ride_length_minute_fixed) as avg_ride_length
+FROM `second-metrics-359815.bike_share.time_of_day`
+GROUP BY rideable_type
+ 
+-- AVG RIDE LENGTH OF CASUALS BY BIKE TYPE
+SELECT member_casual, rideable_type, avg(ride_length_minute_fixed) as avg_ride_length
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "casual"
+GROUP BY rideable_type, member_casual
+ 
+-- AVG RIDE LENGTH OF MEMBERS BY BIKE TYPE
+SELECT member_casual, rideable_type, avg(ride_length_minute_fixed) as avg_ride_length
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "member"
+GROUP BY rideable_type, member_casual
+ 
+-- RIDE TRIPS NUMBER BY STATION
+SELECT start_station_name, COUNT(*) AS ride_trip_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+GROUP BY start_station_name
+ 
+-- RIDE TRIPS NUMBER OF MEMBERS BY STATION
+SELECT member_casual, start_station_name, COUNT(*) AS ride_trip_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "member"
+GROUP BY start_station_name, member_casual
+ 
+-- RIDE TRIPS NUMBER OF CASUALS BY STATION
+SELECT member_casual, start_station_name, COUNT(*) AS ride_trip_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "casual"
+GROUP BY start_station_name, member_casual
+ 
+-- RIDE TRIPS NUMBER BY WEEKEND WEEKDAY
+SELECT  weekend_weekday, COUNT(*) AS ride_trip_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+GROUP BY weekend_weekday
+ 
+-- RIDE TRIPS NUMBER OF MEMBERS BY WEEKEND WEEKDAY
+SELECT member_casual, weekend_weekday, COUNT(*) AS ride_trip_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "member"
+GROUP BY weekend_weekday, member_casual
+ 
+-- RIDE TRIPS NUMBER OF CASUALS BY WEEKEND WEEKDAY
+SELECT member_casual, weekend_weekday, COUNT(*) AS ride_trip_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "casual"
+GROUP BY weekend_weekday, member_casual
+ 
+-- RIDE TRIPS NUMBER BY TIME OF DAY
+SELECT  time_of_day, COUNT(*) AS ride_trip_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+GROUP BY time_of_day
+ 
+-- RIDE TRIPS NUMBER OF MEMBERS BY TIME OF DAY
+SELECT  member_casual, time_of_day, COUNT(*) AS ride_trip_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "member"
+GROUP BY time_of_day, member_casual
+ 
+-- RIDE TRIPS NUMBER OF CASUALS BY TIME OF DAY
+SELECT  member_casual, time_of_day, COUNT(*) AS ride_trip_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "casual"
+GROUP BY time_of_day, member_casual
+ 
+ 
+-- RIDE TRIPS NUMBER OF CASUALS BY TIME OF DAY
+SELECT  member_casual, hour, COUNT(*) AS ride_trip_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "casual"
+GROUP BY hour, member_casual
+ 
+-- RIDE TRIPS NUMBER OF MEMBERS BY TIME OF DAY
+SELECT  member_casual, hour, COUNT(*) AS ride_trip_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+WHERE member_casual = "member"
+GROUP BY hour, member_casual
+ 
+-- RIDE TRIPS NUMBER BY TIME OF DAY
+SELECT  hour, COUNT(*) AS ride_trip_number
+FROM `second-metrics-359815.bike_share.time_of_day`
+GROUP BY hour
+ 
